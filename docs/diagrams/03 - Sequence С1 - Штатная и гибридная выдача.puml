@@ -1,0 +1,40 @@
+@startuml
+title С1. Основной режим – штатная и гибридная выдача
+
+participant "Клиент" as C
+participant "Оркестратор" as O
+participant "Circuit Breaker" as CB
+participant "ML-сервис" as ML
+participant "Fallback-движок" as F
+participant "Сборщик выдачи" as M
+
+C -> O : GET /recommendations
+activate O
+par
+  O -> CB : вызов ML
+  CB -> ML : предсказания (таймаут 3000 мс)
+  activate ML
+else
+  O -> F : расчёт резервной выдачи
+  activate F
+  F --> O : резервный список (score)
+  deactivate F
+end
+ML --> CB : список позиций + confidence по каждой
+deactivate ML
+CB -> CB : зафиксировать успех\nв скользящем окне 60 с
+CB --> O : ответ ML
+O -> M : ML-список + резервный список
+activate M
+alt все позиции: confidence >= 0,6
+  M --> O : выдача source = ml
+else доля слабых позиций <= 50%
+  M -> M : заменить слабые позиции лучшими\nиз резерва (без дублей с ML-позициями)
+  M --> O : выдача source = hybrid
+else доля слабых позиций > 50%
+  M --> O : выдача source = fallback\n(reason = low_confidence)
+end
+deactivate M
+O --> C : 200 OK, единый контракт ответа
+deactivate O
+@enduml

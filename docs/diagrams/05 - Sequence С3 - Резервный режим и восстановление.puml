@@ -1,0 +1,45 @@
+@startuml
+title С3. Резервный режим (DEGRADED) и восстановление (RECOVERY)
+
+participant "Клиент" as C
+participant "Оркестратор" as O
+participant "Circuit Breaker" as CB
+participant "ML-сервис" as ML
+participant "Fallback-движок" as F
+
+== Режим DEGRADED ==
+C -> O : GET /recommendations
+O -> CB : состояние?
+CB --> O : DEGRADED – ML не вызывать
+O -> F : расчёт резервной выдачи
+F --> O : резервный список
+O --> C : 200 OK, source = fallback\n(reason = circuit_open), p95 <= 300 мс
+
+== Истёк T_open ==
+CB -> CB : DEGRADED -> RECOVERY
+
+== Режим RECOVERY ==
+C -> O : GET /recommendations
+O -> CB : состояние?
+alt запрос попал в пробную долю (10%)
+  CB --> O : RECOVERY, проба
+  par
+    O -> CB : вызов ML (проба)
+    CB -> ML : предсказания (таймаут 3000 мс)
+  else
+    O -> F : расчёт резервной выдачи
+    F --> O : резервный список
+  end
+  ML --> CB : ответ
+  CB -> CB : учесть результат пробы\n(успех / ошибка)
+  CB --> O : ответ ML
+else остальные 90% запросов
+  CB --> O : обслуживать из резерва
+  O -> F : расчёт резервной выдачи
+  F --> O : резервный список
+end
+O --> C : 200 OK
+
+== Критерий возврата достигнут ==
+CB -> CB : >= 95% успешных проб (мин. 30 за 120 с)\nRECOVERY -> NORMAL
+@enduml

@@ -1,0 +1,117 @@
+@startuml
+title Сервис рекомендаций – логическая модель данных
+
+class "Пользователь" as User {
+  Идентификатор : uuid
+  Имя : varchar
+  Email : varchar
+  Дата регистрации : timestamp
+}
+
+class "Профиль предпочтений" as Preference {
+  Идентификатор : uuid
+  Пользователь : uuid
+  Категории интересов : array[varchar]
+  Бюджетный диапазон : int4range
+  Стиль поездок : varchar
+  Дата обновления : timestamp
+}
+
+class "Событие активности" as ActivityEvent {
+  Идентификатор : uuid
+  Пользователь : uuid
+  Элемент каталога : uuid
+  Поездка : uuid
+  Тип события : enum
+  Дата события : timestamp
+}
+
+class "Поездка" as Trip {
+  Идентификатор : uuid
+  Направление : varchar
+  Дата начала : date
+  Дата окончания : date
+  Бюджет : numeric
+  Статус : enum
+}
+
+class "Участник поездки" as TripMember {
+  Идентификатор : uuid
+  Поездка : uuid
+  Пользователь : uuid
+  Роль : enum
+}
+
+class "Элемент каталога" as CatalogItem {
+  Идентификатор : uuid
+  Тип : enum
+  Наименование : varchar
+  Направление : varchar
+  Категория : varchar
+  Цена : numeric
+  Рейтинг : numeric
+  Признак доступности : boolean
+}
+
+class "Агрегат популярности" as PopularityAggregate {
+  Идентификатор : uuid
+  Элемент каталога : uuid
+  Направление : varchar
+  Категория : varchar
+  Период сезона : varchar
+  Оценка популярности : numeric
+  Дата расчёта : timestamp
+}
+
+class "Лог выдачи" as RecommendationLog {
+  Идентификатор запроса : uuid
+  Пользователь : uuid
+  Поездка : uuid
+  Режим системы : enum
+  Источник выдачи : enum
+  Причина резерва : enum
+  Природа выдачи : enum
+  Время формирования : integer
+  Дата выдачи : timestamp
+}
+
+class "Позиция выдачи" as RecommendationItem {
+  Идентификатор : uuid
+  Лог выдачи : uuid
+  Элемент каталога : uuid
+  Порядковый номер : integer
+  Источник позиции : enum
+  Confidence : numeric
+  Score : numeric
+}
+
+class "Журнал переключений" as ModeTransitionLog {
+  Идентификатор : uuid
+  Режим до : enum
+  Режим после : enum
+  Причина : enum
+  Комментарий : varchar
+  Автор переключения : varchar
+  Инициатор : enum
+  Дата переключения : timestamp
+}
+
+class "Параметр конфигурации резерва" as FallbackConfig {
+  Ключ : varchar
+  Значение : varchar
+  Описание : varchar
+  Дата изменения : timestamp
+}
+
+User "1" --> "0..1" Preference : имеет
+User "1" --> "many" ActivityEvent : порождает
+ActivityEvent "many" --> "1" CatalogItem : относится к
+ActivityEvent "many" --> "0..1" Trip : в контексте
+Trip "1" --> "many" TripMember : включает
+User "1" --> "many" TripMember : участвует как
+PopularityAggregate "many" --> "1" CatalogItem : агрегирует спрос на
+RecommendationLog "many" --> "1" User : сформирован для
+RecommendationLog "many" --> "0..1" Trip : в контексте
+RecommendationLog "1" --> "many" RecommendationItem : содержит
+RecommendationItem "many" --> "1" CatalogItem : ссылается на
+@enduml

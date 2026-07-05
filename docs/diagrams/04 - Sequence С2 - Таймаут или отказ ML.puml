@@ -1,0 +1,32 @@
+@startuml
+title С2. Таймаут (> 3 с) или отказ ML-сервиса
+
+participant "Клиент" as C
+participant "Оркестратор" as O
+participant "Circuit Breaker" as CB
+participant "ML-сервис" as ML
+participant "Fallback-движок" as F
+
+C -> O : GET /recommendations
+activate O
+par
+  O -> CB : вызов ML
+  CB -> ML : предсказания (таймаут 3000 мс)
+else
+  O -> F : расчёт резервной выдачи
+  F --> O : резервный список
+end
+alt истёк таймаут 3000 мс
+  CB --> O : TimeoutError
+else ML вернул ошибку / недоступен
+  ML --> CB : 5xx / connection error
+  CB --> O : UpstreamError
+end
+CB -> CB : зафиксировать ошибку\nв скользящем окне 60 с
+opt достигнут порог открытия
+  CB -> CB : NORMAL -> DEGRADED,\nзапустить таймер T_open
+end
+O --> C : 200 OK, source = fallback\n(reason = timeout | ml_error)
+deactivate O
+note over C : выдача уже рассчитана параллельно –\nответ отдан без задержки сверх таймаута,\nпользователь ошибки не видит
+@enduml

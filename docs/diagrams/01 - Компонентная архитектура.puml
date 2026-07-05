@@ -1,0 +1,40 @@
+@startuml
+title Резервный сценарий рекомендаций – компонентная архитектура
+skinparam componentStyle rectangle
+
+actor "Пользователь" as User
+component "Клиент\n(Web / Mobile)" as Client
+component "API Gateway" as GW
+
+package "Сервис рекомендаций (оркестратор)" {
+  component "Диспетчер запросов" as Orchestrator
+  component "Circuit Breaker" as CB
+  component "Сборщик выдачи\n(гибридная логика)" as Merger
+  component "Fallback-движок\n(rule-based)" as Fallback
+}
+
+component "ML-сервис\nрекомендаций" as ML
+database "Профили и\nпредпочтения" as Profiles
+database "История\nактивности" as History
+database "Агрегаты\nпопулярности" as Popularity
+database "Каталог\n(отели, активности,\nмаршруты)" as Catalog
+component "Batch-джоба\nагрегации спроса" as Batch
+component "Конфигурация\n(пороги, фиче-флаги)" as Config
+component "Мониторинг\nи алертинг" as Monitoring
+
+User --> Client
+Client --> GW
+GW --> Orchestrator
+Orchestrator --> CB : вызов ML через breaker
+CB --> ML : запрос предсказаний\n(таймаут 3000 мс)
+Orchestrator --> Fallback : параллельный расчёт\nрезервной выдачи
+Fallback --> Profiles
+Fallback --> History
+Fallback --> Popularity
+Fallback --> Catalog
+Batch --> History : читает обезличенно
+Batch --> Popularity : пишет агрегаты\n(каждые 4 часа)
+Orchestrator --> Merger : сборка итоговой выдачи
+Orchestrator ..> Config : пороги, kill switch
+Orchestrator ..> Monitoring : метрики, журнал переключений
+@enduml

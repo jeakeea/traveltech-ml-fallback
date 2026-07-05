@@ -1,0 +1,21 @@
+@startuml
+title Переключатель режимов (circuit breaker) – диаграмма состояний
+
+[*] --> NORMAL
+
+state "NORMAL (основной)" as NORMAL
+state "DEGRADED (резервный)" as DEGRADED
+state "RECOVERY (восстановление)" as RECOVERY
+
+NORMAL --> DEGRADED : доля ошибок ML >= 50% за 60 с (мин. 10 запросов)\nИЛИ 5 ошибок подряд\nИЛИ kill switch включён вручную
+DEGRADED --> RECOVERY : истёк таймер T_open\n(30 с, эксп. рост x2 до 300 с)\nИ kill switch не активен
+RECOVERY --> NORMAL : >= 95% успешных проб\n(мин. 30 проб за 120 с)
+RECOVERY --> DEGRADED : доля ошибок на пробах >= 20%\nИЛИ kill switch включён вручную
+
+NORMAL : запросы в ML + параллельный резерв
+NORMAL : per-request исход: ml / hybrid / fallback
+DEGRADED : ML не вызывается
+DEGRADED : вся выдача из fallback-движка
+RECOVERY : пробы: 10% запросов в ML
+RECOVERY : остальные 90% из резерва
+@enduml
